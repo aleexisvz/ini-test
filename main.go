@@ -16,6 +16,25 @@ type TarjetaPVC struct {
 	TypeImpression string
 }
 
+func formatMoney(amount string) string {
+	// // convert int to decimal
+	// decimalAmount := decimal.NewFromInt(int64(amount))
+
+	// // format decimal to money string
+	// formattedAmount := decimalAmount.StringFixedBank(0)
+
+	var result strings.Builder
+	n := len(amount)
+	for i, r := range amount {
+		if i > 0 && (n-i)%3 == 0 {
+			result.WriteRune('.')
+		}
+		result.WriteRune(r)
+	}
+
+	return result.String()
+}
+
 func roundToNearest(t *TarjetaPVC, cfg *ini.File) {
 	// save keys and value on keyMap
 	keyMap := make(map[string]string)
@@ -50,7 +69,7 @@ func roundToNearest(t *TarjetaPVC, cfg *ini.File) {
 }
 
 func calculatePrice(t *TarjetaPVC, cfg *ini.File) {
-	// vars
+	// temp vars
 	var price int
 	var amount int
 
@@ -101,6 +120,10 @@ func main() {
 	}
 
 	calculatePrice(&t, cfg)
+
+	// format
+	t.Price = formatMoney(t.Price)
+	t.Amount = formatMoney(t.Amount)
 
 	fmt.Printf("%su. Tarjetas PVC %s te salen $%s", t.Amount, t.TypeImpression, t.Price)
 }
