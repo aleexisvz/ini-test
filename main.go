@@ -11,18 +11,16 @@ import (
 )
 
 type TarjetaPVC struct {
-	Amount         string
-	Price          string
-	TypeImpression string
+	Amount             string
+	Price              string
+	TypeImpression     string
+	VariableData       bool
+	VariableDataFields int
+	VariableDataPrice  string
+	VariableDataStart  string
 }
 
 func formatMoney(amount string) string {
-	// // convert int to decimal
-	// decimalAmount := decimal.NewFromInt(int64(amount))
-
-	// // format decimal to money string
-	// formattedAmount := decimalAmount.StringFixedBank(0)
-
 	var result strings.Builder
 	n := len(amount)
 	for i, r := range amount {
@@ -35,17 +33,26 @@ func formatMoney(amount string) string {
 	return result.String()
 }
 
-func roundToNearest(t *TarjetaPVC, cfg *ini.File) {
-	// save keys and value on keyMap
+func roundToNearest(t *TarjetaPVC, cfg *ini.File, toNearest int) string {
+	// save keys and values on keyMap
 	keyMap := make(map[string]string)
 
-	if t.TypeImpression == "SIMPLE FAZ" {
-		for _, key := range cfg.Section("SIMPLEFAZ").Keys() {
-			keyMap[key.Name()] = key.Value()
+	switch toNearest {
+	case 1:
+		if t.TypeImpression == "SIMPLE FAZ" {
+			for _, key := range cfg.Section("SIMPLEFAZ").Keys() {
+				keyMap[key.Name()] = key.Value()
+			}
+		} else {
+			for _, key := range cfg.Section("DOBLEFAZ").Keys() {
+				keyMap[key.Name()] = key.Value()
+			}
 		}
-	} else {
-		for _, key := range cfg.Section("DOBLEFAZ").Keys() {
-			keyMap[key.Name()] = key.Value()
+	case 2:
+		if t.VariableData {
+			for _, key := range cfg.Section("VARIABLEDATA").Keys() {
+				keyMap[key.Name()] = key.Value()
+			}
 		}
 	}
 
@@ -63,21 +70,12 @@ func roundToNearest(t *TarjetaPVC, cfg *ini.File) {
 	}
 
 	closestKeyStr := strconv.Itoa(closestKey)
-	result, _ := strconv.Atoi(keyMap[closestKeyStr])
+	result := keyMap[closestKeyStr]
 
-	t.Price = strconv.Itoa(result)
+	return result
 }
 
-func calculatePrice(t *TarjetaPVC, cfg *ini.File) {
-	// temp vars
-	var price int
-	var amount int
-
-	// set amount
-	fmt.Print("Enter amount: ")
-	fmt.Scanln(&t.Amount)
-	t.Amount = strings.TrimSpace(t.Amount)
-
+func setTypeImpression(t *TarjetaPVC) {
 	// get type of impression, simple or doble faz
 	fmt.Print("Doble faz? (y/n): ")
 	var dobleFaz string
@@ -85,27 +83,84 @@ func calculatePrice(t *TarjetaPVC, cfg *ini.File) {
 
 	if strings.ToLower(dobleFaz) == "y" {
 		t.TypeImpression = "DOBLE FAZ"
+	} else {
+		t.TypeImpression = "SIMPLE FAZ"
+	}
+}
 
+func setAmount(t *TarjetaPVC) {
+	// get amount
+	fmt.Print("Enter amount: ")
+	fmt.Scanln(&t.Amount)
+	t.Amount = strings.TrimSpace(t.Amount)
+}
+
+func loadAttributes(t *TarjetaPVC, cfg *ini.File) {
+	setAmount(t)
+	setTypeImpression(t)
+	setVariableData(t, cfg)
+	calculatePrice(t, cfg)
+}
+
+func setVariableData(t *TarjetaPVC, cfg *ini.File) {
+	// get variable data
+	fmt.Print("Contiene campos variables? (y/n): ")
+	var variableData string
+	fmt.Scanln(&variableData)
+
+	if strings.ToLower(variableData) == "y" {
+		t.VariableData = true
+
+		// get quantity of variable fields
+		fmt.Print("Cuantos campos variables?: ")
+		fmt.Scanln(&t.VariableDataFields)
+	} else {
+		t.VariableData = false
+	}
+
+	if t.VariableData {
+		// get variable price
+		t.VariableDataPrice = roundToNearest(t, cfg, 2)
+		fmt.Printf("Precio por campo variable: %s\n", t.VariableDataPrice)
+		t.VariableDataStart = cfg.Section("VARIABLEDATA").Key("costoInicio").String()
+		fmt.Printf("Costo de inicio: %s\n", t.VariableDataStart)
+	}
+}
+
+func calculatePrice(t *TarjetaPVC, cfg *ini.File) {
+	// temp vars
+	var price int
+	var amount int
+
+	if t.TypeImpression == "DOBLE FAZ" {
 		// round to nearest
-		roundToNearest(t, cfg)
+		t.Price = roundToNearest(t, cfg, 1)
 
 		price, _ = strconv.Atoi(t.Price)
 		amount, _ = strconv.Atoi(t.Amount)
 
-		price = price * amount
+		price *= amount
 		t.Price = strconv.Itoa(price)
 	} else {
-		t.TypeImpression = "SIMPLE FAZ"
-
 		// round to nearest
-		roundToNearest(t, cfg)
+		t.Price = roundToNearest(t, cfg, 1)
 
 		price, _ = strconv.Atoi(t.Price)
 		amount, _ = strconv.Atoi(t.Amount)
 
 		// calculate & set price
-		price = price * amount
+		price *= amount
 		t.Price = strconv.Itoa(price)
+	}
+
+	if t.VariableData {
+		// temp vars
+		costoInicio, _ := strconv.Atoi(t.VariableDataStart)
+
+		// calculate & set price
+		variableDataPrice, _ := strconv.Atoi(t.VariableDataPrice)
+		variableDataPrice = (variableDataPrice * t.VariableDataFields * amount) + costoInicio
+		t.Price = strconv.Itoa(price + variableDataPrice)
 	}
 }
 
@@ -119,7 +174,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	calculatePrice(&t, cfg)
+	loadAttributes(&t, cfg)
 
 	// format
 	t.Price = formatMoney(t.Price)
