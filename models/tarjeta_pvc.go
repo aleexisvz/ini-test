@@ -10,14 +10,19 @@ import (
 )
 
 type TarjetaPVC struct {
-	Amount              int
-	Price               float64
-	PriceTotal          float64
-	TypeImpression      string
-	VariableData        bool
-	VariableDataFields  int
-	VariableDataPrice   float64
-	VariableDataStart   float64
+	// BASIC DATA
+	Amount         int
+	Price          float64
+	PriceTotal     float64
+	TypeImpression string
+
+	// VARIABLE DATA
+	VariableData       bool
+	VariableDataFields int
+	VariableDataPrice  float64
+	VariableDataStart  float64
+
+	// VARIABLE PHOTO
 	VariablePhoto       bool
 	VariablePhotoFields int
 	VariablePhotoPrice  float64
