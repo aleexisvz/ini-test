@@ -27,6 +27,11 @@ type TarjetaPVC struct {
 	VariablePhotoFields int
 	VariablePhotoPrice  float64
 	VariablePhotoStart  float64
+
+	// RELIEF
+	Relief      bool
+	ReliefPrice float64
+	ReliefStart float64
 }
 
 func (t *TarjetaPVC) SetAmount() {
@@ -78,10 +83,22 @@ func (t *TarjetaPVC) SetVariablePhoto() {
 	}
 }
 
+func (t *TarjetaPVC) SetRelief() {
+	// get relief
+	fmt.Print("Contiene relieve? (y/n): ")
+	var relief string
+	fmt.Scanln(&relief)
+
+	if strings.ToLower(relief) == "y" {
+		t.Relief = true
+	}
+}
+
 func (t *TarjetaPVC) CalculateTotal() {
 	// temp vars
 	var variableData float64
 	var variablePhoto float64
+	var relief float64
 
 	// calculate total price
 	if t.VariableData {
@@ -92,16 +109,30 @@ func (t *TarjetaPVC) CalculateTotal() {
 		variablePhoto = (float64(t.VariablePhotoFields) * t.VariablePhotoPrice * float64(t.Amount)) + t.VariablePhotoStart
 	}
 
+	if t.Relief {
+		relief = (t.ReliefPrice * float64(t.Amount)) + t.ReliefStart
+	}
+
 	t.PriceTotal = t.Price * float64(t.Amount)
-	t.PriceTotal = t.PriceTotal + variableData + variablePhoto
+	t.PriceTotal = t.PriceTotal + variableData + variablePhoto + relief
 }
 
 func (t *TarjetaPVC) LoadValues() {
+	var aditionals string
+
 	// set the basic values
 	t.SetAmount()
 	t.SetTypeImpression()
-	t.SetVariableData()
-	t.SetVariablePhoto()
+
+	// have aditionals?
+	fmt.Print("Tiene adicionales? (y/n): ")
+	fmt.Scanln(&aditionals)
+
+	if strings.ToLower(aditionals) == "y" {
+		t.SetVariableData()
+		t.SetVariablePhoto()
+		t.SetRelief()
+	}
 
 	// load config.ini file
 	cfg, err := ini.Load("config.ini")
@@ -188,6 +219,31 @@ func (t *TarjetaPVC) LoadValues() {
 
 		// get variable data start cost
 		t.VariablePhotoStart, _ = strconv.ParseFloat(cfg.Section("VARIABLEPHOTO").Key("costoInicio").Value(), 64)
+	}
+
+	// ---------------- RELIEF ----------------
+
+	if t.Relief {
+		// load prices from config.ini on keyMap
+		for _, k := range cfg.Section("RELIEF").Keys() {
+			key, _ := strconv.Atoi(k.Name())
+			value, _ := strconv.ParseFloat(k.Value(), 64)
+			keyMap[key] = value
+		}
+
+		// use a for loop to get the closest key
+		minDiff := math.MaxInt
+
+		for key := range keyMap {
+			diff := int(math.Abs(float64(key - t.Amount)))
+			if diff < minDiff {
+				minDiff = diff
+				t.ReliefPrice = keyMap[key]
+			}
+		}
+
+		// get variable data start cost
+		t.ReliefStart, _ = strconv.ParseFloat(cfg.Section("RELIEF").Key("costoInicio").Value(), 64)
 	}
 
 	t.CalculateTotal()
